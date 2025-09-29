@@ -1,4 +1,4 @@
-from database_connection import create_db_engine
+from tests.database_connection import create_db_engine
 from sqlalchemy import text
 
 def get_all_events():
