@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
+from decimal import Decimal
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -42,3 +43,50 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: str
     user : UserResponse    
+
+# Event Schemas
+class EventCreate(BaseModel):
+    title: str = Field(min_length=3, max_length=200)
+    description: str
+    event_date: datetime
+    location: str
+    price: Decimal = Field(ge=0)
+    capacity: int = Field(gt=0)
+    category_id: Optional[int] = None
+
+class EventResponse(BaseModel):
+    id: int
+    title: str
+    description: str
+    event_date: datetime
+    location: str
+    price: Decimal
+    capacity: int
+    tickets_sold: int
+    is_active: bool
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+# Ticket Schemas
+class TicketResponse(BaseModel):
+    id: int
+    ticket_code: str
+    event_id: int
+    status: str
+    purchase_date: datetime
+    amount_paid: Decimal
+    qr_code_path: Optional[str] = None
+    model_config = {"from_attributes": True}
+
+# Payment Schemas
+class PaymentInitiate(BaseModel):
+    event_id: int
+    email: EmailStr
+
+class PaymentResponse(BaseModel):
+    authorization_url: str
+    reference: str
+    access_code: str
+
+class PaymentVerify(BaseModel):
+    reference: str

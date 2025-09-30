@@ -2,7 +2,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from jose import JWTError
-from . import crud, schemas
+from . import schemas
+from .cruds import users as user_crud
 from .database import get_db
 from .security import verify_token
 
@@ -31,7 +32,7 @@ def get_current_user(
             raise credentials_exception
         
         # Get user from database
-        user = crud.get_user_by_email(db, email=token_data["email"])
+        user = user_crud.get_user_by_email(db, email=token_data["email"])
         if user is None:
             raise credentials_exception
         

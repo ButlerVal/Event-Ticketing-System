@@ -31,5 +31,5 @@ def get_db():
 def create_tables():
     """Create all tables in the database"""
     # Import models here to avoid circular imports
-    from . import models
+    import models
     Base.metadata.create_all(bind=engine)
