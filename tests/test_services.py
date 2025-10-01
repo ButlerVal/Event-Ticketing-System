@@ -2,20 +2,29 @@ import pytest
 from unittest.mock import patch, MagicMock
 from app.services import qr_service, email_service
 from app.services.paystack import CircuitBreaker
+from app.services import qr_service
+from pathlib import Path
+from pyzbar.pyzbar import decode
+from PIL import Image
 
-def test_generate_qr_code():
-    """Test QR code generation"""
+def test_generate_qr_code(tmp_path):
+    """Test that QR code is generated and can be decoded"""
     ticket_code = "TEST-123456"
-    
-    with patch('qrcode.QRCode') as mock_qr:
-        mock_instance = MagicMock()
-        mock_qr.return_value = mock_instance
-        
-        result = qr_service.generate_qr_code(ticket_code)
-        
-        assert ticket_code in result
-        assert result.endswith('.png')
-        mock_instance.add_data.assert_called_once_with(ticket_code)
+
+    # Override output directory to use pytest's tmp_path (keeps tests clean)
+    qr_service.Path("qr_codes").mkdir(parents=True, exist_ok=True)
+
+    result = qr_service.generate_qr_code(ticket_code)
+
+    # Assert file path
+    assert result.endswith(f"{ticket_code}.png")
+    filepath = Path(result)
+    assert filepath.exists()
+
+    # Decode the QR to verify correctness
+    decoded = decode(Image.open(filepath))
+    assert decoded, "QR code could not be decoded"
+    assert decoded[0].data.decode("utf-8") == ticket_code
 
 def test_circuit_breaker_closed_state():
     """Test circuit breaker in closed state"""
