@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 from decimal import Decimal
@@ -23,8 +23,7 @@ class UserResponse(UserBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -65,7 +64,7 @@ class EventResponse(BaseModel):
     tickets_sold: int
     is_active: bool
     created_at: datetime
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 # Ticket Schemas
 class TicketResponse(BaseModel):
@@ -76,7 +75,7 @@ class TicketResponse(BaseModel):
     purchase_date: datetime
     amount_paid: Decimal
     qr_code_path: Optional[str] = None
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 # Payment Schemas
 class PaymentInitiate(BaseModel):
