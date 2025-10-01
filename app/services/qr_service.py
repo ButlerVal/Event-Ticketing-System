@@ -2,7 +2,6 @@ import re
 from pathlib import Path
 import qrcode
 from qrcode.constants import ERROR_CORRECT_L
-from pyzbar.pyzbar import decode
 from PIL import Image
 
 def generate_qr_code(ticket_code: str) -> str:
@@ -34,10 +33,5 @@ def generate_qr_code(ticket_code: str) -> str:
     filepath = qr_dir / f"{safe_name}.png"
     with filepath.open("wb") as f:
         img.save(f, "PNG")
-
-    # ✅ Validate by reading QR back
-    decoded = decode(Image.open(filepath))
-    if not decoded or decoded[0].data.decode("utf-8") != ticket_code:
-        raise ValueError(f"QR code for '{ticket_code}' was saved but could not be validated!")
 
     return str(filepath)
