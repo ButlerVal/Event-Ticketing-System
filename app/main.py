@@ -13,7 +13,7 @@ app = FastAPI(
 
 # Add custom middleware
 app.add_middleware(SecurityMiddleware)
-app.add_middleware(RateLimitMiddleware, max_requests=50, window_seconds=60)
+app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
 app.add_middleware(CORSMiddleware)
 
 # Include routers
