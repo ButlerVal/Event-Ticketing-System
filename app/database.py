@@ -29,6 +29,5 @@ def get_db():
 
 def create_tables():
     """Create all tables in the database"""
-    # Import models here to avoid circular imports
-    import models
+    from . import models  # Fixed import
     Base.metadata.create_all(bind=engine)
