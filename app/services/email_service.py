@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER")
-SMTP_USER_EMAIL = os.getenv("SMTP_USER_EMAIL")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
 def send_ticket_email(
@@ -38,7 +37,7 @@ def send_ticket_email(
     logger.info(f"Attempting to send email to {to_email}")
     
     msg = MIMEMultipart()
-    msg['From'] = SMTP_USER_EMAIL if SMTP_USER_EMAIL else "Event Tickets <onboarding@resend.dev>"
+    msg['From'] = SMTP_USER
     msg['To'] = to_email
     msg['Subject'] = f"Your Ticket for {event_title}"
     
