@@ -1,6 +1,6 @@
 # 🎟️ Event Ticketing System
 
-A complete, production-ready event ticketing platform built with FastAPI, featuring Paystack payment integration, QR code generation, email notifications, and comprehensive security features.
+A complete, production-ready event ticketing platform built with FastAPI, featuring Paystack payment integration, QR code generation, SendGrid email notifications, and comprehensive security features.
 
 ## 📋 Table of Contents
 
@@ -24,14 +24,14 @@ A complete, production-ready event ticketing platform built with FastAPI, featur
 - **Event Management**: Create, list, and manage events with capacity tracking
 - **Payment Processing**: Secure Paystack integration with circuit breaker pattern
 - **Ticket Generation**: Automatic QR code generation for tickets
-- **Email Notifications**: Automated ticket delivery via email
+- **Email Notifications**: Automated ticket delivery via SendGrid
 - **Rate Limiting**: Built-in API rate limiting protection
 - **Security Headers**: Comprehensive security middleware
 
 ### Technical Features
 - RESTful API design
 - PostgreSQL database with SQLAlchemy ORM
-- Bcrypt password hashing
+- Bcrypt password hashing (12 rounds)
 - JWT token-based authentication
 - Circuit breaker pattern for payment gateway resilience
 - Comprehensive test coverage with pytest
@@ -44,11 +44,11 @@ A complete, production-ready event ticketing platform built with FastAPI, featur
 - **Database**: PostgreSQL with SQLAlchemy 2.0.43
 - **Authentication**: JWT (python-jose 3.5.0) + Bcrypt (4.3.0)
 - **Payment Gateway**: Paystack API
-- **QR Codes**: qrcode 8.2 + pyzbar
-- **Email**: SMTP (smtplib)
+- **QR Codes**: qrcode 8.2 + Pillow 11.3.0
+- **Email**: SendGrid API
 - **Testing**: pytest 8.4.2 + pytest-asyncio
 - **Server**: Uvicorn 0.35.0
-- **Production**: Gunicorn with Uvicorn workers
+- **Production**: Gunicorn 23.0.0 with Uvicorn workers
 
 ## 📦 Prerequisites
 
@@ -68,12 +68,10 @@ Before you begin, ensure you have the following installed:
    - Sign up at [paystack.com](https://paystack.com)
    - Get your test/live API keys from the dashboard
 
-3. **Gmail Account** (or SMTP-enabled email)
-   - For sending ticket emails
-   - Enable "App Passwords" for Gmail:
-     - Go to Google Account → Security
-     - Enable 2-Factor Authentication
-     - Generate App Password under "App passwords"
+3. **SendGrid Account** (for email notifications)
+   - Sign up at [sendgrid.com](https://sendgrid.com)
+   - Get your API key from the dashboard
+   - Verify your sender email address
 
 ## 🚀 Installation & Setup
 
@@ -159,11 +157,9 @@ JWT_SECRET_KEY=your-super-secret-key-minimum-32-characters-long
 PAYSTACK_SECRET_KEY=sk_test_your_secret_key_here
 PAYSTACK_PUBLIC_KEY=pk_test_your_public_key_here
 
-# Email Configuration - REQUIRED
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-16-char-app-password
+# SendGrid Configuration - REQUIRED
+SENDGRID_API_KEY=SG.your_sendgrid_api_key_here
+SENDGRID_USER=your-verified-sender@example.com
 
 # Frontend URL - OPTIONAL (defaults to localhost:3000)
 FRONTEND_URL=http://localhost:3000
@@ -177,9 +173,19 @@ FRONTEND_URL=http://localhost:3000
   print(secrets.token_urlsafe(32))
   ```
 
-- **SMTP_PASSWORD**: For Gmail, use an App Password (NOT your regular password)
+- **SENDGRID_API_KEY**: Get from SendGrid Dashboard → Settings → API Keys
+
+- **SENDGRID_USER**: Must be a verified sender email in SendGrid
 
 - **Never commit `.env` to version control** (already in `.gitignore`)
+
+### Step 6: Verify SendGrid Setup
+
+1. Log in to [SendGrid](https://app.sendgrid.com)
+2. Go to Settings → Sender Authentication
+3. Verify your sender email address
+4. Create an API Key with "Mail Send" permissions
+5. Use the verified email as `SENDGRID_USER`
 
 ## 🏃 Running the Application
 
@@ -221,38 +227,74 @@ Once the server is running, access the auto-generated API documentation:
   - Interactive API explorer
   - Test endpoints directly in browser
   - View request/response schemas
+  - **Try it out** feature for all endpoints
 
 - **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
   - Alternative documentation format
   - Better for reading/reference
+  - Clean, professional layout
 
 ### API Endpoints Overview
 
 #### Authentication (`/auth`)
 - `POST /auth/register` - Register new user
+  - **Body**: `{ "email": "user@example.com", "name": "User Name", "password": "password123" }`
+  - **Response**: User object with ID and timestamps
+  
 - `POST /auth/login` - Login and get JWT token
+  - **Body**: `{ "email": "user@example.com", "password": "password123" }`
+  - **Response**: `{ "access_token": "...", "token_type": "bearer", "user": {...} }`
+  
 - `GET /auth/me` - Get current user info (requires auth)
+  - **Headers**: `Authorization: Bearer <token>`
+  - **Response**: Current user object
 
 #### Events (`/events`)
 - `POST /events/` - Create event (requires auth)
+  - **Headers**: `Authorization: Bearer <token>`
+  - **Body**: Event details (title, description, date, location, price, capacity)
+  - **Response**: Created event object
+  
 - `GET /events/` - List all events (public)
+  - **Query**: `?skip=0&limit=100` (pagination)
+  - **Response**: Array of event objects
+  
 - `GET /events/{event_id}` - Get event details (public)
+  - **Response**: Single event object
 
 #### Payments (`/payments`)
 - `POST /payments/initialize` - Initialize payment (requires auth)
+  - **Headers**: `Authorization: Bearer <token>`
+  - **Body**: `{ "event_id": 1, "email": "user@example.com" }`
+  - **Response**: `{ "authorization_url": "...", "reference": "...", "access_code": "..." }`
+  
 - `GET /payments/verify/{reference}` - Verify payment (requires auth)
+  - **Headers**: `Authorization: Bearer <token>`
+  - **Response**: `{ "message": "...", "ticket_code": "...", "qr_code_path": "...", "email_sent": true }`
 
 #### Tickets (`/tickets`)
 - `GET /tickets/my-tickets` - Get user's tickets (requires auth)
+  - **Headers**: `Authorization: Bearer <token>`
+  - **Response**: Array of ticket objects
+  
 - `GET /tickets/{ticket_code}` - Get ticket by code (public)
+  - **Response**: Single ticket object with QR code path
 
 ### Authentication Flow
 
-1. Register a user or login to get a token
+1. **Register a user** or **login** to get a token
 2. Include token in subsequent requests:
    ```
    Authorization: Bearer <your_jwt_token>
    ```
+3. Token expires after 30 minutes (configurable)
+
+### Payment Flow
+
+1. **Initialize Payment**: Get Paystack checkout URL
+2. **User Completes Payment**: Redirect to Paystack (external)
+3. **Verify Payment**: Confirm payment and generate ticket
+4. **Receive Email**: SendGrid sends ticket with QR code
 
 ## 🧪 Testing
 
@@ -276,44 +318,63 @@ View coverage report: Open `htmlcov/index.html` in your browser
 pytest tests/test_auth.py
 pytest tests/test_events.py
 pytest tests/test_payments.py
+pytest tests/test_tickets.py
+pytest tests/test_services.py
 ```
 
 ### Test Structure
 
-- `tests/test_auth.py` - Authentication endpoints
-- `tests/test_events.py` - Event management
-- `tests/test_payments.py` - Payment processing
-- `tests/test_tickets.py` - Ticket operations
-- `tests/test_services.py` - Service layer (QR, email, circuit breaker)
+- `tests/test_auth.py` - Authentication endpoints (register, login, JWT)
+- `tests/test_events.py` - Event management (create, list, retrieve)
+- `tests/test_payments.py` - Payment processing (initialize, verify)
+- `tests/test_tickets.py` - Ticket operations (list, retrieve)
+- `tests/test_services.py` - Service layer (QR generation, email, circuit breaker)
+
+### Test Coverage
+
+Current test coverage includes:
+- ✅ User registration and authentication
+- ✅ Event CRUD operations
+- ✅ Payment initialization and verification (mocked)
+- ✅ Ticket generation and retrieval
+- ✅ QR code generation
+- ✅ Email service (mocked)
+- ✅ Circuit breaker pattern
+- ✅ Error handling and validation
 
 ## 🚀 Deployment
 
 ### Deploy to Render
 
-1. **Create `render.yaml`** (already included)
-
-2. **Push to GitHub**:
+1. **Push to GitHub**:
    ```bash
    git add .
    git commit -m "Ready for deployment"
    git push origin main
    ```
 
-3. **Connect to Render**:
-   - Go to [render.com](https://render.com)
-   - Create new Web Service
-   - Connect your GitHub repo
-   - Render auto-detects settings from `render.yaml`
+2. **Create PostgreSQL Database** on Render:
+   - Go to [render.com](https://render.com) Dashboard
+   - Click "New" → "PostgreSQL"
+   - Copy the "External Database URL"
+
+3. **Create Web Service**:
+   - Click "New" → "Web Service"
+   - Connect your GitHub repository
+   - Render auto-detects settings from `Procfile`
 
 4. **Set Environment Variables** in Render dashboard:
-   - DATABASE_URL (from Render PostgreSQL)
-   - JWT_SECRET_KEY
-   - PAYSTACK_SECRET_KEY
-   - PAYSTACK_PUBLIC_KEY
-   - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
-   - FRONTEND_URL
+   ```
+   DATABASE_URL=<from Render PostgreSQL>
+   JWT_SECRET_KEY=<your-generated-secret>
+   PAYSTACK_SECRET_KEY=<from Paystack>
+   PAYSTACK_PUBLIC_KEY=<from Paystack>
+   SENDGRID_API_KEY=<from SendGrid>
+   SENDGRID_USER=<your-verified-email>
+   FRONTEND_URL=<your-frontend-url>
+   ```
 
-5. **Deploy**: Render automatically builds and deploys
+5. **Deploy**: Click "Manual Deploy" or wait for auto-deploy
 
 ### Deploy to Heroku
 
@@ -330,7 +391,8 @@ heroku addons:create heroku-postgresql:mini
 # Set environment variables
 heroku config:set JWT_SECRET_KEY=your-secret-key
 heroku config:set PAYSTACK_SECRET_KEY=your-paystack-key
-# ... set other variables
+heroku config:set SENDGRID_API_KEY=your-sendgrid-key
+heroku config:set SENDGRID_USER=your-email@example.com
 
 # Deploy
 git push heroku main
@@ -377,9 +439,9 @@ EventTicketing/
 │   │   ├── payments.py
 │   │   └── tickets.py
 │   └── services/            # External service integrations
-│       ├── paystack.py      # Paystack payment gateway
+│       ├── paystack.py      # Paystack payment gateway (with circuit breaker)
 │       ├── qr_service.py    # QR code generation
-│       └── email_service.py # Email notifications
+│       └── email_service.py # SendGrid email notifications
 ├── tests/                   # Test suite
 │   ├── conftest.py          # Test configuration & fixtures
 │   ├── test_auth.py
@@ -391,36 +453,39 @@ EventTicketing/
 ├── .env.example             # Environment variables template
 ├── .gitignore
 ├── requirements.txt         # Python dependencies
-├── Procfile                 # Deployment configuration
-├── runtime.txt              # Python version
+├── Procfile                 # Deployment configuration (Heroku/Render)
+├── runtime.txt              # Python version specification
 └── README.md
 ```
 
 ## 🔒 Security Features
 
 ### Authentication & Authorization
-- **JWT Tokens**: Stateless authentication with expiration
+- **JWT Tokens**: Stateless authentication with 30-minute expiration
 - **Bcrypt Hashing**: Secure password storage with 12 rounds
 - **Token Validation**: Middleware validates tokens on protected routes
+- **Bearer Token Scheme**: HTTP Authorization header
 
 ### API Security
 - **Rate Limiting**: 100 requests per 60 seconds per IP
 - **CORS Protection**: Configurable allowed origins
 - **Security Headers**: 
-  - X-Content-Type-Options: nosniff
-  - X-Frame-Options: DENY
-  - X-XSS-Protection: 1; mode=block
-  - Strict-Transport-Security
+  - `X-Content-Type-Options: nosniff`
+  - `X-Frame-Options: DENY`
+  - `X-XSS-Protection: 1; mode=block`
+  - `Strict-Transport-Security: max-age=31536000`
 
 ### Payment Security
-- **Circuit Breaker**: Prevents cascade failures
-- **Reference Validation**: Unique transaction references
-- **Status Tracking**: Payment state management
+- **Circuit Breaker**: Prevents cascade failures (5 failures → 60s timeout)
+- **Reference Validation**: Unique transaction references (cryptographically secure)
+- **Status Tracking**: Payment state management (pending → success/failed)
+- **Idempotency**: Payment verification is idempotent
 
 ### Data Security
 - **SQL Injection Protection**: SQLAlchemy ORM parameterization
 - **Input Validation**: Pydantic schema validation
 - **Environment Variables**: Sensitive data not in code
+- **Password Requirements**: Minimum 8 characters
 
 ## 🐛 Troubleshooting
 
@@ -446,39 +511,47 @@ source .env  # Linux/Mac
 pip install psycopg2-binary
 ```
 
-### Email Sending Issues
+### SendGrid Email Issues
 
-**Problem**: `SMTPAuthenticationError`
+**Problem**: `Unauthorized: No API key provided`
 
 **Solution**:
-- For Gmail, use an App Password, not your regular password
-- Enable 2FA first, then generate App Password
-- Ensure SMTP_USER and SMTP_PASSWORD are correct in `.env`
+- Verify `SENDGRID_API_KEY` is set in `.env`
+- Check that the API key has "Mail Send" permissions
+- Ensure there are no extra spaces in the API key
+
+**Problem**: `Sender email not verified`
+
+**Solution**:
+- Go to SendGrid Dashboard → Settings → Sender Authentication
+- Verify your sender email address
+- Use the exact verified email as `SENDGRID_USER`
 
 **Problem**: Emails not arriving
 
 **Solution**:
 - Check spam folder
-- Verify SMTP credentials
-- Test with a simple SMTP client
-- Check Gmail "Less secure apps" settings (if not using App Password)
+- Verify sender email is verified in SendGrid
+- Check SendGrid dashboard for delivery status
+- Ensure recipient email is valid
 
 ### Paystack Integration Issues
 
 **Problem**: `Payment initialization failed`
 
 **Solution**:
-- Verify PAYSTACK_SECRET_KEY in `.env`
+- Verify `PAYSTACK_SECRET_KEY` in `.env`
 - Check if using test keys (`sk_test_...`) for development
-- Ensure amount is in correct currency (Naira for Nigeria)
+- Ensure amount is positive and in correct currency
 - Check Paystack dashboard for API status
 
 **Problem**: `Circuit breaker is OPEN`
 
 **Solution**:
 - Wait 60 seconds for circuit breaker to reset
-- Check Paystack API status
+- Check Paystack API status at [status.paystack.com](https://status.paystack.com)
 - Verify network connectivity
+- Check API key validity
 
 ### QR Code Issues
 
@@ -489,7 +562,16 @@ pip install psycopg2-binary
 # Ensure qr_codes directory exists and is writable
 mkdir -p qr_codes
 chmod 755 qr_codes
+
+# Check Pillow installation
+pip install --upgrade Pillow
 ```
+
+**Problem**: `Cannot write mode RGBA as PNG`
+
+**Solution**:
+- Update Pillow: `pip install --upgrade Pillow`
+- This is fixed in the current implementation (converts to RGB)
 
 ### Port Already in Use
 
@@ -526,6 +608,15 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### Test Failures
+
+**Problem**: Tests failing with database errors
+
+**Solution**:
+- Tests use in-memory SQLite, no external database needed
+- Ensure pytest and pytest-asyncio are installed
+- Run: `pip install pytest pytest-asyncio`
+
 ## 📧 Support
 
 For issues, questions, or contributions:
@@ -536,6 +627,7 @@ For issues, questions, or contributions:
    - Steps to reproduce
    - Expected vs actual behavior
    - Environment details (OS, Python version)
+   - Relevant logs or error messages
 
 ## 📄 License
 
@@ -545,6 +637,7 @@ This project is provided as-is for educational and commercial use.
 
 - FastAPI for the excellent framework
 - Paystack for payment processing
+- SendGrid for email delivery
 - All open-source contributors
 
 ---
